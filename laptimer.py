@@ -54,9 +54,12 @@ def counter_label(lbl):
     def count():
         if running:
             global lapstart
+            global lastlap
             duration = time.time() - lapstart
             lbl['text'] = time.strftime("%M:%S.{}".format(str(duration % 1)[2:])[:8], time.gmtime(duration))
             lbl.after(60, count)    
+        else:
+            lbl['text'] = time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap))
     count()     
 
 def StartTimer(lbl):
@@ -92,7 +95,7 @@ def MarkLapCallback(channel):
     global lastlap
     global prevlap
     lastlap = time.time() - lapstart
-    lapstart = time.time()
+    #lapstart = time.time() #This should be used if we want to reset here, otherwise leave it
     
     laptime_listbox.insert(1,time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap)))
     diff=lastlap-prevlap
@@ -109,6 +112,7 @@ def MarkLapCallback(channel):
     lbl_lastLaptime['text']=time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap))
     lbl_lastLapdiff['text']=diffstr
     prevlap = lastlap
+    StopTimer() #Stop timer, wait for next beam break
 
 
 lbl_curlab = Label(f_current,text="Current Lap:",fg="white",bg="black",font=("Veranda",int(font_size/4),"bold"),anchor="w",justify="left")
