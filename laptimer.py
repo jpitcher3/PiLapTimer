@@ -1,5 +1,5 @@
 from tkinter import *
-from tkinter import ttk
+import threading
 import time
 import RPi.GPIO as GPIO
 
@@ -45,8 +45,8 @@ difftime_listbox = Listbox(f_results_right
                           , font=("Verdana",int(font_size/4),"bold"))
 
 lbl_lastLap = Label(f_results_left,text="Last Lap:",fg="white",bg="black",font=("Veranda",int(font_size/4),"bold"),anchor="w",justify="left")
-lbl_lastLaptime = Label(f_results_left,text="00:00.000",fg="white",bg="black",font=("Veranda",int(font_size/2),"bold"),anchor="w",justify="left")
-lbl_lastLapdiff = Label(f_results_left,text="+ 00:00.000",fg="white",bg="black",font=("Veranda",int(font_size/2),"bold"),anchor="w",justify="right")
+lbl_lastLaptime = Label(f_results_left,text="00:00.00",fg="white",bg="black",font=("Veranda",int(font_size/2),"bold"),anchor="w",justify="left")
+lbl_lastLapdiff = Label(f_results_left,text="+ 00:00.00",fg="white",bg="black",font=("Veranda",int(font_size/2),"bold"),anchor="w",justify="right")
 
 counter = -1
 running = False
@@ -59,7 +59,7 @@ def counter_label(lbl):
             lbl['text'] = time.strftime("%M:%S.{}".format(str(duration % 1)[2:])[:8], time.gmtime(duration))
             lbl.after(60, count)    
         else:
-            lbl['text'] = time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap))
+            lbl['text'] = time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:8], time.gmtime(lastlap))
     count()     
 
 def StartTimer(lbl):
@@ -88,6 +88,11 @@ def ResetTimer(lbl):
 
 def MarkLapCallback(channel):
     global running
+    time.sleep(0.005)
+    if GPIO.input(18):
+        #high, not valid
+        return
+
     if running==False:
         StartTimer(lbl)
         return
@@ -97,9 +102,9 @@ def MarkLapCallback(channel):
     lastlap = time.time() - lapstart
     #lapstart = time.time() #This should be used if we want to reset here, otherwise leave it
     
-    laptime_listbox.insert(1,time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap)))
+    laptime_listbox.insert(1,time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:8], time.gmtime(lastlap)))
     diff=lastlap-prevlap
-    diffstr=time.strftime("%M:%S.{}".format(str(abs(diff) % 1)[2:])[:9], time.gmtime(abs(diff)))
+    diffstr=time.strftime("%M:%S.{}".format(str(abs(diff) % 1)[2:])[:8], time.gmtime(abs(diff)))
     if diff<0:
         diffstr = ["-",diffstr]
         lbl_lastLaptime['fg']="green"
@@ -109,7 +114,7 @@ def MarkLapCallback(channel):
         lbl_lastLaptime['fg']="red"
         lbl_lastLapdiff['fg']="red"
     difftime_listbox.insert(0, diffstr)
-    lbl_lastLaptime['text']=time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:9], time.gmtime(lastlap))
+    lbl_lastLaptime['text']=time.strftime("%M:%S.{}".format(str(lastlap % 1)[2:])[:8], time.gmtime(lastlap))
     lbl_lastLapdiff['text']=diffstr
     prevlap = lastlap
     StopTimer() #Stop timer, wait for next beam break
@@ -178,10 +183,32 @@ lbl_lastLapdiff.pack(fill=X,side=TOP)
 laptime_listbox.pack(fill=BOTH)
 #difftime_listbox.pack(side=LEFT,fill=BOTH)
 
+checkinput  =True
+
+def checkinput():
+    global checkinput
+    armed = True
+    while(checkinput):
+        time.sleep(0.01)
+        if GPIO.input(18):
+            armed = True #reset
+            continue
+        elif armed:
+            MarkLapCallback(18)
+            armed = False #wait until the input is high again before triggering
+
+
+
 
 
 GPIO.setmode(GPIO.BOARD)
 GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_UP) #pin 18 = GPIO 24
-GPIO.add_event_detect(18,GPIO.FALLING,callback=MarkLapCallback, bouncetime=200)
+#GPIO.add_event_detect(18,GPIO.FALLING,callback=MarkLapCallback, bouncetime=200)
+input_thread = threading.Thread(target = checkinput)
+input_thread.start()
+
 ws.mainloop()
+
+checkinput = False
+input_thread.join()
 GPIO.cleanup(18)
